@@ -1,11 +1,10 @@
-// api/mediator.js - Vercel Serverless Function with CORS and Model Fix
+// api/mediator.js - Fixed Array Parsing & Robust Fallbacks
 export default async function handler(req, res) {
-  // 1. ADD CRITICAL CORS HEADERS TO UNBLOCK BROWSER REQUESTS
+  // Setup standard CORS settings to unblock browsers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-  // Handle pre-flight browser checks
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
@@ -18,12 +17,12 @@ export default async function handler(req, res) {
     const { question, answers } = req.body;
 
     if (!question || !answers || !Array.isArray(answers)) {
-      return res.status(400).json({ error: "Invalid request data structure" });
+      return res.status(400).json({ error: "Invalid request data mapping" });
     }
 
     const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
     if (!GEMINI_API_KEY) {
-      return res.status(500).json({ error: "API key not configured on Vercel" });
+      return res.status(500).json({ error: "Vercel environment key is completely empty" });
     }
 
     const conversationHistory = `The question was: "${question}"\nPlayers answered: ${answers.join(", ")}`;
@@ -32,7 +31,6 @@ Analyze their answers: ${conversationHistory}.
 Provide one direct, vulnerable 'Bridge Question' to break the tension. 
 Keep it under 30 words. No intro or outro.`;
 
-    // 2. USE PRODUCTION STABLE MODEL ENDPOINT
     const response = await fetch(
       `https://googleapis.com{GEMINI_API_KEY}`,
       {
@@ -46,15 +44,21 @@ Keep it under 30 words. No intro or outro.`;
 
     if (!response.ok) {
       const errorData = await response.json();
-      return res.status(response.status).json({ error: errorData.error?.message || "Gemini API failure" });
+      return res.status(response.status).json({ error: errorData.error?.message || "Google API response failure" });
     }
 
     const json = await response.json();
-    const aiQuestion = json.candidates[0].content.parts[0].text.trim();
+    
+    // SAFE ARRAY MAPPING FIX: Added robust optional chaining and proper index lookups
+    const aiQuestion = json.candidates?.[0]?.content?.parts?.[0]?.text || "";
+
+    if (!aiQuestion) {
+      return res.status(500).json({ error: "AI returned an empty response string structure" });
+    }
 
     return res.status(200).json({
       success: true,
-      bridgeQuestion: aiQuestion,
+      bridgeQuestion: aiQuestion.trim(),
     });
   } catch (error) {
     return res.status(500).json({ error: error.message });
