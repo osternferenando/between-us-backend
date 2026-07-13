@@ -1,5 +1,15 @@
-// api/mediator.js - Vercel Serverless Function
+// api/mediator.js - Vercel Serverless Function with CORS and Model Fix
 export default async function handler(req, res) {
+  // 1. ADD CRITICAL CORS HEADERS TO UNBLOCK BROWSER REQUESTS
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  // Handle pre-flight browser checks
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
@@ -8,13 +18,12 @@ export default async function handler(req, res) {
     const { question, answers } = req.body;
 
     if (!question || !answers || !Array.isArray(answers)) {
-      return res.status(400).json({ error: "Invalid request: need question and answers array" });
+      return res.status(400).json({ error: "Invalid request data structure" });
     }
 
     const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
     if (!GEMINI_API_KEY) {
-      console.error("❌ GEMINI_API_KEY not set");
-      return res.status(500).json({ error: "API key not configured" });
+      return res.status(500).json({ error: "API key not configured on Vercel" });
     }
 
     const conversationHistory = `The question was: "${question}"\nPlayers answered: ${answers.join(", ")}`;
@@ -23,10 +32,9 @@ Analyze their answers: ${conversationHistory}.
 Provide one direct, vulnerable 'Bridge Question' to break the tension. 
 Keep it under 30 words. No intro or outro.`;
 
-    console.log("🤖 Calling Gemini...");
-
+    // 2. USE PRODUCTION STABLE MODEL ENDPOINT
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1/models/gemini-3.1-flash-lite:generateContent?key=${GEMINI_API_KEY}`,
+      `https://googleapis.com{GEMINI_API_KEY}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -38,21 +46,17 @@ Keep it under 30 words. No intro or outro.`;
 
     if (!response.ok) {
       const errorData = await response.json();
-      return res.status(response.status).json({ error: errorData.error?.message || "Gemini API error" });
+      return res.status(response.status).json({ error: errorData.error?.message || "Gemini API failure" });
     }
 
     const json = await response.json();
     const aiQuestion = json.candidates[0].content.parts[0].text.trim();
-
-    console.log("✅ Got response:", aiQuestion);
 
     return res.status(200).json({
       success: true,
       bridgeQuestion: aiQuestion,
     });
   } catch (error) {
-    console.error("❌ Error:", error.message);
-    return res.status(500).json({ error: "Internal server error" });
+    return res.status(500).json({ error: error.message });
   }
 }
-```
