@@ -1,4 +1,4 @@
-// api/mediator.js - Fixed Array Parsing & Robust Fallbacks
+// api/mediator.js - FIXED: Correct Gemini API endpoint + error handling
 export default async function handler(req, res) {
   // Setup standard CORS settings to unblock browsers
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -16,23 +16,26 @@ export default async function handler(req, res) {
   try {
     const { question, answers } = req.body;
 
+    // Validate incoming request
     if (!question || !answers || !Array.isArray(answers)) {
-      return res.status(400).json({ error: "Invalid request data mapping" });
+      return res.status(400).json({ error: "Invalid request: need 'question' and 'answers' array" });
     }
 
     const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
     if (!GEMINI_API_KEY) {
-      return res.status(500).json({ error: "Vercel environment key is completely empty" });
+      return res.status(500).json({ error: "Server config error: GEMINI_API_KEY not set" });
     }
 
+    // Build the conversation context
     const conversationHistory = `The question was: "${question}"\nPlayers answered: ${answers.join(", ")}`;
     const prompt = `Two players are playing a deep connection game but seem to be stalling or avoiding the topic. 
 Analyze their answers: ${conversationHistory}. 
 Provide one direct, vulnerable 'Bridge Question' to break the tension. 
 Keep it under 30 words. No intro or outro.`;
 
+    // FIXED: Use correct Gemini API endpoint with proper template literal syntax
     const response = await fetch(
-      `https://googleapis.com{GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-lite:generateContent?key=${GEMINI_API_KEY}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -44,16 +47,19 @@ Keep it under 30 words. No intro or outro.`;
 
     if (!response.ok) {
       const errorData = await response.json();
-      return res.status(response.status).json({ error: errorData.error?.message || "Google API response failure" });
+      console.error(`Gemini API error (${response.status}):`, errorData);
+      return res.status(response.status).json({ 
+        error: errorData.error?.message || "Gemini API request failed" 
+      });
     }
 
     const json = await response.json();
     
-    // SAFE ARRAY MAPPING FIX: Added robust optional chaining and proper index lookups
+    // Safe extraction with proper optional chaining
     const aiQuestion = json.candidates?.[0]?.content?.parts?.[0]?.text || "";
 
     if (!aiQuestion) {
-      return res.status(500).json({ error: "AI returned an empty response string structure" });
+      return res.status(500).json({ error: "Gemini returned empty response" });
     }
 
     return res.status(200).json({
@@ -61,6 +67,7 @@ Keep it under 30 words. No intro or outro.`;
       bridgeQuestion: aiQuestion.trim(),
     });
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    console.error("Mediator handler error:", error);
+    return res.status(500).json({ error: error.message || "Internal server error" });
   }
 }
