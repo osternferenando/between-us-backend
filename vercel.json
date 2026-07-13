@@ -1,0 +1,11 @@
+```json
+{
+  "buildCommand": "echo 'No build needed'",
+  "functions": {
+    "api/mediator.js": {
+      "memory": 128,
+      "maxDuration": 10
+    }
+  }
+}
+```
