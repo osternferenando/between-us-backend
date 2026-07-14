@@ -25,10 +25,21 @@ export default async function handler(req, res) {
     }
 
     const conversationHistory = `The question was: "${question}"\nPlayers answered: ${answers.join(", ")}`;
-    const prompt = `Two players are playing a deep connection game but seem to be stalling or avoiding the topic. 
-Analyze their answers: ${conversationHistory}. 
-Provide one direct, vulnerable 'Bridge Question' to break the tension. 
-Keep it under 30 words. No intro or outro.`;
+    const prompt = `Two players are playing a deep connection game. Their recent answers were very short or evasive, suggesting they may be avoiding vulnerability.
+
+Respond with ONLY a single direct, vulnerable question to help them go deeper. 
+Do NOT include any preamble, analysis, or "Question:" prefix.
+Do NOT use "we" or "us" - use neutral, observational language.
+Do NOT explain why you're asking it.
+Do NOT address them as a group ("we both", "our", "we are") - use "you" instead.
+
+The question must:
+- Be under 30 words
+- Sound like a natural follow-up question (not an analysis)
+- Invite specific vulnerability without presuming what they're feeling
+- Use "you/your" or neutral phrasing, not "we/our/us"
+
+Just provide the question. Nothing else.`;
 
     // CORRECT: Using gemini-3.5-flash (active model)
     const response = await fetch(
